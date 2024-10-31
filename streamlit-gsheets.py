@@ -246,7 +246,7 @@ class StreamlitApp:
         agg_dict = {
             'Profit_PLAYER': 'sum',
             'Win_USD_PLAYER': 'sum',
-            
+            'RB_USD_Player': 'sum',
             'руки': 'sum',
             'Rake_USD_PLAYER': 'sum'
         }
