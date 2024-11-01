@@ -30,9 +30,6 @@ CACHE_FILE = 'data_cache.json'
 def get_date_ranges() -> Dict[str, Tuple[date, date]]:
     """
     Возвращает диапазоны дат для фильтрации
-    
-    Returns:
-        Dict[str, Tuple[date, date]]: Словарь с диапазонами дат
     """
     today = date.today()
     first_day_current = today.replace(day=1)
@@ -42,7 +39,7 @@ def get_date_ranges() -> Dict[str, Tuple[date, date]]:
         'current_month': (first_day_current, today),
         'last_30_days': (thirty_days_ago, today)
     }
-
+    
 class DataCache:
     def __init__(self):
         self.cache_path = CACHE_PATH
@@ -50,12 +47,7 @@ class DataCache:
         os.makedirs(self.cache_path, exist_ok=True)
     
     def save_to_cache(self, data: pd.DataFrame):
-        """
-        Сохраняет данные в кэш
-        
-        Args:
-            data (pd.DataFrame): DataFrame для сохранения
-        """
+        """Сохраняет данные в кэш"""
         try:
             data_copy = data.copy()
             date_column = data_copy.columns[0]
@@ -80,12 +72,7 @@ class DataCache:
             raise
     
     def load_from_cache(self) -> Optional[pd.DataFrame]:
-        """
-        Загружает данные из кэша
-        
-        Returns:
-            Optional[pd.DataFrame]: Загруженный DataFrame или None в случае ошибки
-        """
+        """Загружает данные из кэша"""
         try:
             cache_file = os.path.join(self.cache_path, self.cache_file)
             if not os.path.exists(cache_file):
@@ -126,52 +113,9 @@ class DataCache:
             logger.error(f"Ошибка при очистке кэша: {e}")
             raise
 
-    def get_cache_info(self) -> Dict[str, Any]:
-        """
-        Получает информацию о состоянии кэша
-        
-        Returns:
-            Dict[str, Any]: Информация о кэше
-        """
-        try:
-            cache_file = os.path.join(self.cache_path, self.cache_file)
-            if not os.path.exists(cache_file):
-                return {
-                    'exists': False,
-                    'size': 0,
-                    'last_modified': None,
-                    'age_hours': None
-                }
-            
-            with open(cache_file, 'r', encoding='utf-8') as f:
-                cache_data = json.load(f)
-            
-            timestamp = datetime.fromisoformat(cache_data['timestamp'])
-            age = datetime.now() - timestamp
-            
-            return {
-                'exists': True,
-                'size': os.path.getsize(cache_file),
-                'last_modified': timestamp,
-                'age_hours': age.total_seconds() / 3600
-            }
-            
-        except Exception as e:
-            logger.error(f"Ошибка при получении информации о кэше: {e}")
-            return {
-                'exists': False,
-                'size': 0,
-                'last_modified': None,
-                'age_hours': None,
-                'error': str(e)
-            }
-
 class DataLoader:
     def __init__(self):
-        """
-        Инициализация загрузчика данных.
-        Устанавливает соединение с Google Sheets и создает объект кеша.
-        """
+        """Инициализация загрузчика данных"""
         try:
             self.credentials = service_account.Credentials.from_service_account_info(
                 st.secrets["gcp_service_account"],
@@ -189,15 +133,7 @@ class DataLoader:
             st.error("Ошибка при инициализации подключения к Google Sheets")
 
     def _format_date(self, date_str: str) -> date:
-        """
-        Преобразует строку даты в объект date.
-        
-        Args:
-            date_str: Строка с датой или объект date
-            
-        Returns:
-            date: Объект datetime.date или None в случае ошибки
-        """
+        """Преобразует строку даты в объект date"""
         if isinstance(date_str, date):
             return date_str
             
@@ -205,26 +141,16 @@ class DataLoader:
             return None
             
         try:
-            # Пробуем формат DD.MM.YYYY
             return datetime.strptime(str(date_str).strip(), '%d.%m.%Y').date()
         except ValueError:
             try:
-                # Пробуем другие форматы через pandas
                 return pd.to_datetime(date_str).date()
             except:
                 logger.error(f"Не удалось преобразовать дату: {date_str}")
                 return None
 
     def _process_numeric_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Обрабатывает числовые столбцы DataFrame.
-        
-        Args:
-            df: Исходный DataFrame
-            
-        Returns:
-            DataFrame: Обработанный DataFrame
-        """
+        """Обрабатывает числовые столбцы DataFrame"""
         try:
             df = df.copy()
             
@@ -238,9 +164,7 @@ class DataLoader:
                               .str.replace(' ', '', regex=False)
                               .pipe(pd.to_numeric, errors='coerce'))
             
-            # Фильтруем строки, где тренер = '0'
             df = df[df['Тренер'] != '0']
-            
             return df
             
         except Exception as e:
@@ -248,162 +172,8 @@ class DataLoader:
             st.error("Ошибка при обработке данных")
             return df
 
-    def _fetch_from_sheets(self) -> Optional[pd.DataFrame]:
-        """
-        Загружает данные из Google Sheets.
-        
-        Returns:
-            Optional[pd.DataFrame]: Загруженный DataFrame или None в случае ошибки
-        """
-        try:
-            logger.info("Загрузка данных из Google Sheets")
-            sheet = self.service.spreadsheets()
-            result = sheet.values().get(
-                spreadsheetId=SPREADSHEET_ID,
-                range="pivot_result"
-            ).execute()
-            values = result.get("values", [])
-            
-            if not values:
-                st.error("Данные не найдены в Google Sheets")
-                return None
-            
-            df = pd.DataFrame(values[1:], columns=values[0])
-            
-            date_column = df.columns[0]
-            df[date_column] = df[date_column].apply(self._format_date)
-            
-            # Удаляем строки с некорректными датами
-            df = df.dropna(subset=[date_column])
-            
-            return self._process_numeric_columns(df)
-            
-        except Exception as e:
-            logger.error(f"Ошибка при загрузке данных из Google Sheets: {e}")
-            st.error(f"Ошибка при загрузке данных: {str(e)}")
-            return None
-
-    def _validate_dataframe(self, df: pd.DataFrame) -> bool:
-        """
-        Проверяет корректность загруженного DataFrame.
-        
-        Args:
-            df: DataFrame для проверки
-            
-        Returns:
-            bool: True если DataFrame корректен, False в противном случае
-        """
-        if df is None or df.empty:
-            return False
-            
-        required_columns = ['Тренер', 'nickname', 'club_name'] + NUMERIC_COLUMNS
-        for col in required_columns:
-            if col not in df.columns:
-                logger.error(f"Отсутствует обязательный столбец: {col}")
-                return False
-                
-        date_column = df.columns[0]
-        if df[date_column].isna().all():
-            logger.error("Все значения в столбце даты отсутствуют")
-            return False
-            
-        return True
-
     def load_data(self, force_reload: bool = False) -> Optional[pd.DataFrame]:
-        """
-        Загружает данные из кеша или Google Sheets.
-        
-        Args:
-            force_reload: Принудительная загрузка из Google Sheets
-            
-        Returns:
-            Optional[pd.DataFrame]: Загруженный DataFrame или None в случае ошибки
-        """
-        try:
-            df = None
-            
-            # Пытаемся загрузить из кеша, если не требуется принудительное обновление
-            if not force_reload:
-                df = self.cache.load_from_cache()
-                if df is not None:
-                    logger.info("Данные успешно загружены из кеша")
-                    
-                    # Проверяем и преобразуем даты после загрузки из кеша
-                    date_column = df.columns[0]
-                    df[date_column] = df[date_column].apply(self._format_date)
-                    df = df.dropna(subset=[date_column])
-                    
-                    if self._validate_dataframe(df):
-                        return df
-                    else:
-                        logger.warning("Данные в кеше повреждены")
-            
-            # Если нет данных в кеше или требуется обновление, загружаем из Google Sheets
-            df = self._fetch_from_sheets()
-            
-            if df is not None and self._validate_dataframe(df):
-                # Сохраняем успешно загруженные данные в кеш
-                self.cache.save_to_cache(df)
-                logger.info("Данные успешно сохранены в кеш")
-                return df
-            else:
-                logger.error("Не удалось загрузить корректные данные")
-                return None
-                
-        except Exception as e:
-            logger.error(f"Ошибка при загрузке данных: {e}")
-            st.error(f"Ошибка при загрузке данных: {str(e)}")
-            return None
-
-    def clear_cache(self) -> bool:
-        """
-        Очищает кеш данных.
-        
-        Returns:
-            bool: True если очистка успешна, False в противном случае
-        """
-        try:
-            self.cache.clear_cache()
-            logger.info("Кеш успешно очищен")
-            return True
-        except Exception as e:
-            logger.error(f"Ошибка при очистке кеша: {e}")
-            return False
-    def __init__(self):
-        try:
-            self.credentials = service_account.Credentials.from_service_account_info(
-                st.secrets["gcp_service_account"],
-                scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"],
-            )
-            self.service = build(
-                "sheets", 
-                "v4", 
-                credentials=self.credentials,
-                cache_discovery=False
-            )
-            self.cache = DataCache()
-        except Exception as e:
-            logger.error(f"Ошибка при инициализации DataLoader: {e}")
-            st.error("Ошибка при инициализации подключения к Google Sheets")
-
-    def _format_date(self, date_str: str) -> str:
-        """Преобразует строку даты в правильный формат"""
-        try:
-            return pd.to_datetime(date_str, format='%d.%m.%Y').date()
-        except:
-            try:
-                return pd.to_datetime(date_str).date()
-            except:
-                logger.error(f"Не удалось преобразовать дату: {date_str}")
-                return None
-
-    def load_data(self, force_reload: bool = False) -> Optional[pd.DataFrame]:
-        """
-        Загружает данные из кэша или Google Sheets
-        
-        Args:
-            force_reload (bool): Принудительная загрузка из Google Sheets
-        """
+        """Загружает данные из кэша или Google Sheets"""
         try:
             if not force_reload:
                 cached_data = self.cache.load_from_cache()
@@ -427,6 +197,9 @@ class DataLoader:
             date_column = df.columns[0]
             df[date_column] = df[date_column].apply(self._format_date)
             
+            # Удаляем строки с некорректными датами
+            df = df.dropna(subset=[date_column])
+            
             processed_df = self._process_numeric_columns(df)
             if processed_df is not None:
                 self.cache.save_to_cache(processed_df)
@@ -439,147 +212,183 @@ class DataLoader:
             st.error(f"Ошибка при загрузке данных: {str(e)}")
             return None
 
-    def _process_numeric_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Обрабатывает числовые столбцы DataFrame"""
-        try:
-            df = df.copy()
-            for col in NUMERIC_COLUMNS:
-                if col in df.columns:
-                    df[col] = (df[col]
-                              .replace('', np.nan)
-                              .str.replace('\xa0', '')
-                              .str.replace(',', '.')
-                              .pipe(pd.to_numeric, errors='coerce'))
-            df = df[df['Тренер'] != '0']
-            return df
-        except Exception as e:
-            logger.error(f"Ошибка при обработке числовых столбцов: {e}")
-            st.error("Ошибка при обработке данных")
-            return df
-
 class StreamlitApp:
     def __init__(self):
-        st.set_page_config(
-            page_title="Google Sheets Viewer",
-            page_icon="📊",
-            layout="wide"
-        )
-        self.data_loader = DataLoader()
-        self.data = None
-        self.filtered_data = None
-        self.date_ranges = get_date_ranges()
+        """Инициализация приложения"""
+        try:
+            st.set_page_config(
+                page_title="Google Sheets Viewer",
+                page_icon="📊",
+                layout="wide",
+                initial_sidebar_state="expanded"
+            )
+            
+            self.data_loader = DataLoader()
+            self.date_ranges = get_date_ranges()
+            
+            # Инициализация данных
+            self._initialize_data()
+            
+        except Exception as e:
+            logger.error(f"Ошибка при инициализации приложения: {e}")
+            st.error("Ошибка при инициализации приложения")
+
+    def _initialize_data(self):
+        """Инициализация данных при первом запуске"""
+        try:
+            with st.spinner("Загрузка данных..."):
+                self.data = self.data_loader.load_data()
+                if self.data is None:
+                    raise ValueError("Не удалось загрузить данные")
+        except Exception as e:
+            logger.error(f"Ошибка при инициализации данных: {e}")
+            self.data = None
+
+    def show_error_message(self, message: str, error: Exception = None):
+        """Отображает сообщение об ошибке"""
+        st.error(message)
+        if error:
+            logger.error(f"{message}: {str(error)}")
+
+    def show_success_message(self, message: str):
+        """Отображает сообщение об успехе"""
+        st.success(message)
+        logger.info(message)           
 
     def setup_filters(self) -> Dict[str, Any]:
-        """
-        Настраивает фильтры данных и возвращает выбранные параметры фильтрации
-        """
-        with st.sidebar:
-            st.header("Фильтр по датам")
-            
-            # Убеждаемся, что даты в DataFrame правильного типа
-            date_column = self.data.columns[0]
-            self.data[date_column] = pd.to_datetime(self.data[date_column]).dt.date
-            
-            min_date = self.data[date_column].min()
-            max_date = self.data[date_column].max()
-            
-            # Кнопки быстрого выбора периода
-            date_filter_type = st.radio(
-                "Выберите период:",
-                ["Текущий месяц", "Последние 30 дней", "Все время", "Выбрать период"]
-            )
-            
-            if date_filter_type == "Выбрать период":
-                col1, col2 = st.columns(2)
-                with col1:
-                    start_date = st.date_input(
-                        "Начало периода",
-                        value=min_date,
-                        min_value=min_date,
-                        max_value=max_date,
-                        format="DD.MM.YYYY"
-                    )
-                with col2:
-                    end_date = st.date_input(
-                        "Конец периода",
-                        value=max_date,
-                        min_value=min_date,
-                        max_value=max_date,
-                        format="DD.MM.YYYY"
-                    )
-            else:
-                if date_filter_type == "Текущий месяц":
-                    start_date = self.date_ranges['current_month'][0]
-                    end_date = self.date_ranges['current_month'][1]
-                elif date_filter_type == "Последние 30 дней":
-                    start_date = self.date_ranges['last_30_days'][0]
-                    end_date = self.date_ranges['last_30_days'][1]
-                else:  # Все время
-                    start_date = min_date
-                    end_date = max_date
-            
-            st.markdown("---")
-            
-            # Приводим даты к нужному типу для фильтрации
-            period_filtered_data = self.data[
-                (self.data[date_column] >= pd.to_datetime(start_date).date()) &
-                (self.data[date_column] <= pd.to_datetime(end_date).date())
-            ]
-            
-            # Фильтр по тренеру
-            all_coaches = ['Все'] + sorted(period_filtered_data['Тренер'].unique().tolist())
-            selected_coach = st.selectbox(
-                "Выберите тренера",
-                all_coaches,
-                index=0
-            )
-            
-            # Фильтруем данные для игроков
-            if selected_coach != 'Все':
-                players_data = period_filtered_data[period_filtered_data['Тренер'] == selected_coach]
-            else:
-                players_data = period_filtered_data
+            """Настраивает фильтры данных и возвращает выбранные параметры фильтрации"""
+            if self.data is None:
+                raise ValueError("Данные не загружены")
                 
-            # Фильтр по игроку
-            all_players = ['Все'] + sorted(players_data['nickname'].unique().tolist())
-            selected_player = st.selectbox(
-                "Выберите игрока",
-                all_players,
-                index=0
-            )
-            
-            return {
-                "coach": selected_coach,
-                "player": selected_player,
-                "grouping": ['Тренер', 'nickname'],
-                "start_date": pd.to_datetime(start_date).date(),
-                "end_date": pd.to_datetime(end_date).date()
-            }
+            with st.sidebar:
+                # Добавляем кнопку обновления данных в начало сайдбара
+                if st.button("🔄 Обновить данные", key="refresh_data"):
+                    with st.spinner("Обновление данных..."):
+                        try:
+                            self.data = self.data_loader.load_data(force_reload=True)
+                            if self.data is not None:
+                                self.show_success_message("Данные обновлены!")
+                                st.rerun()
+                            else:
+                                self.show_error_message("Не удалось обновить данные")
+                        except Exception as e:
+                            self.show_error_message("Ошибка при обновлении данных", e)
+                
+                st.markdown("---")  # Разделитель после кнопки
+                
+                st.header("Фильтр по датам")
+                
+                # Получаем и преобразуем даты
+                date_column = self.data.columns[0]
+                self.data[date_column] = pd.to_datetime(self.data[date_column]).dt.date
+                
+                min_date = self.data[date_column].min()
+                max_date = self.data[date_column].max()
+                
+                # Кнопки быстрого выбора периода
+                date_filter_type = st.radio(
+                    "Выберите период:",
+                    ["Текущий месяц", "Последние 30 дней", "Все время", "Выбрать период"]
+                )
+                
+                if date_filter_type == "Выбрать период":
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        start_date = st.date_input(
+                            "Начало периода",
+                            value=min_date,
+                            min_value=min_date,
+                            max_value=max_date,
+                            format="DD.MM.YYYY"
+                        )
+                    with col2:
+                        end_date = st.date_input(
+                            "Конец периода",
+                            value=max_date,
+                            min_value=min_date,
+                            max_value=max_date,
+                            format="DD.MM.YYYY"
+                        )
+                else:
+                    if date_filter_type == "Текущий месяц":
+                        start_date = self.date_ranges['current_month'][0]
+                        end_date = self.date_ranges['current_month'][1]
+                    elif date_filter_type == "Последние 30 дней":
+                        start_date = self.date_ranges['last_30_days'][0]
+                        end_date = self.date_ranges['last_30_days'][1]
+                    else:  # Все время
+                        start_date = min_date
+                        end_date = max_date
+                
+                st.markdown("---")
+                
+                # Фильтруем данные по выбранному периоду
+                period_filtered_data = self.data[
+                    (self.data[date_column] >= pd.to_datetime(start_date).date()) &
+                    (self.data[date_column] <= pd.to_datetime(end_date).date())
+                ]
+                
+                # Фильтр по тренеру
+                all_coaches = ['Все'] + sorted(period_filtered_data['Тренер'].unique().tolist())
+                selected_coach = st.selectbox(
+                    "Выберите тренера",
+                    all_coaches,
+                    index=0
+                )
+                
+                # Фильтруем данные для игроков
+                if selected_coach != 'Все':
+                    players_data = period_filtered_data[period_filtered_data['Тренер'] == selected_coach]
+                else:
+                    players_data = period_filtered_data
+                    
+                # Фильтр по игроку
+                all_players = ['Все'] + sorted(players_data['nickname'].unique().tolist())
+                selected_player = st.selectbox(
+                    "Выберите игрока",
+                    all_players,
+                    index=0
+                )
+                
+                return {
+                    "coach": selected_coach,
+                    "player": selected_player,
+                    "grouping": ['Тренер', 'nickname'],
+                    "start_date": pd.to_datetime(start_date).date(),
+                    "end_date": pd.to_datetime(end_date).date()
+                }
 
     def apply_filters(self, params: Dict[str, Any]) -> pd.DataFrame:
-        """
-        Применяет фильтры к данным
-        """
-        filtered_data = self.data.copy()
-        date_column = filtered_data.columns[0]
-        
-        # Убеждаемся, что даты в правильном формате
-        filtered_data[date_column] = pd.to_datetime(filtered_data[date_column]).dt.date
-        
-        # Применяем фильтры
-        filtered_data = filtered_data[
-            (filtered_data[date_column] >= params["start_date"]) &
-            (filtered_data[date_column] <= params["end_date"])
-        ]
-        
-        if params["coach"] != 'Все':
-            filtered_data = filtered_data[filtered_data['Тренер'] == params["coach"]]
-        
-        if params["player"] != 'Все':
-            filtered_data = filtered_data[filtered_data['nickname'] == params["player"]]
-        
-        return filtered_data
-
+        """Применяет фильтры к данным"""
+        try:
+            filtered_data = self.data.copy()
+            date_column = filtered_data.columns[0]
+            
+            # Убеждаемся, что даты в правильном формате
+            filtered_data[date_column] = pd.to_datetime(filtered_data[date_column]).dt.date
+            
+            # Применяем фильтры
+            filtered_data = filtered_data[
+                (filtered_data[date_column] >= params["start_date"]) &
+                (filtered_data[date_column] <= params["end_date"])
+            ]
+            
+            if params["coach"] != 'Все':
+                filtered_data = filtered_data[filtered_data['Тренер'] == params["coach"]]
+            
+            if params["player"] != 'Все':
+                filtered_data = filtered_data[filtered_data['nickname'] == params["player"]]
+            
+            if filtered_data.empty:
+                logger.warning("После применения фильтров данные отсутствуют")
+                st.warning("Нет данных для выбранных фильтров")
+            
+            return filtered_data
+            
+        except Exception as e:
+            logger.error(f"Ошибка при применении фильтров: {e}")
+            raise RuntimeError(f"Ошибка при применении фильтров: {str(e)}")
+            
     def process_and_display_data(self, filtered_data: pd.DataFrame, params: Dict[str, Any]):
         """Обрабатывает и отображает данные"""
         agg_dict = {
@@ -590,6 +399,7 @@ class StreamlitApp:
             'Rake_USD_PLAYER': 'sum'
         }
         
+        # Группировка данных
         grouped_data = (filtered_data
                        .groupby(params["grouping"], as_index=False)
                        .agg(agg_dict)
@@ -600,6 +410,7 @@ class StreamlitApp:
         
         col1, col2 = st.columns([4, 4])
         
+        # Первая колонка с таблицами
         with col1:
             st.subheader("Сгруппированные данные")
             
@@ -638,6 +449,7 @@ class StreamlitApp:
             
             filtered_grouped_data = filtered_grouped_data.drop(columns=["Выбрать"])
             
+            # Статистика по клубам
             st.subheader("Статистика по клубам")
             
             club_data = (filtered_for_visualization
@@ -646,9 +458,6 @@ class StreamlitApp:
                         .round(0)
                         .sort_values(by='Profit_PLAYER', ascending=False))
             
-
-                
-                
             club_data = club_data.rename(columns={
                 'club_name': 'Клуб',
                 'Profit_PLAYER': 'Профит',
@@ -677,6 +486,7 @@ class StreamlitApp:
                 }
             )
         
+        # Вторая колонка с метриками и графиком
         with col2:
             metric_cols = st.columns(5)
             
@@ -692,9 +502,9 @@ class StreamlitApp:
             metric_cols[3].metric("Руки", f"{total_hands:,.0f}")
             metric_cols[4].metric("Rake", f"${total_rake:,.0f}")
             
-            self.display_visualizations(filtered_for_visualization, params)
+            self.display_visualizations(filtered_for_visualization)
 
-    def display_visualizations(self, filtered_data: pd.DataFrame, params: Dict[str, Any]):
+    def display_visualizations(self, filtered_data: pd.DataFrame):
         """Отображает визуализации данных"""
         if len(filtered_data) > 1:
             date_column = filtered_data.columns[0]
@@ -765,62 +575,41 @@ class StreamlitApp:
             
             st.plotly_chart(fig, use_container_width=True)
 
-    def load_data(self):
-        """
-        Загружает данные с возможностью обновления
-        """
-        try:
-            col1, col2 = st.columns([6, 1])
-            with col2:
-                refresh = st.button("🔄 Обновить данные", key="refresh_data")
+    def run(self):
+            """Запускает приложение"""
+            try:
+                st.title("Анализ данных игроков")
                 
-                if refresh:
-                    with st.spinner("Обновление данных..."):
-                        self.data = self.data_loader.load_data(force_reload=True)
-                        if self.data is not None:
-                            st.success("Данные обновлены!")
-                            try:
-                                st.rerun()  # Используем новый метод вместо experimental_rerun
-                            except AttributeError:
-                                # Для обратной совместимости со старыми версиями Streamlit
-                                try:
-                                    st.experimental_rerun()
-                                except Exception as e:
-                                    st.warning("Пожалуйста, обновите страницу вручную")
-                                    logger.error(f"Ошибка при перезагрузке страницы: {e}")
-            
-            if self.data is None:
-                with st.spinner("Загрузка данных..."):
-                    self.data = self.data_loader.load_data()
+                if self.data is None:
+                    self._initialize_data()
                     if self.data is None:
-                        st.error("Не удалось загрузить данные. Пожалуйста, проверьте подключение и попробуйте снова.")
+                        st.error("Не удалось загрузить данные. Пожалуйста, обновите страницу.")
                         return
                 
-
+                # Настройка фильтров и получение параметров
+                try:
+                    params = self.setup_filters()
+                except Exception as e:
+                    self.show_error_message("Ошибка при настройке фильтров", e)
+                    return
                 
-        except Exception as e:
-            logger.error(f"Ошибка при загрузке данных: {e}")
-            st.error("Произошла ошибка при загрузке данных. Пожалуйста, обновите страницу и попробуйте снова.")
-            return None
+                # Применение фильтров
+                try:
+                    filtered_data = self.apply_filters(params)
+                except Exception as e:
+                    self.show_error_message("Ошибка при применении фильтров", e)
+                    return
+                
+                # Обработка и отображение данных
+                try:
+                    self.process_and_display_data(filtered_data, params)
+                except Exception as e:
+                    self.show_error_message("Ошибка при отображении данных", e)
+                    
+            except Exception as e:
+                self.show_error_message("Критическая ошибка в приложении", e)
 
-    def run(self):
-        """Запускает приложение"""
-        st.title("Анализ данных игроков")
-        
-        # Загрузка данных с возможностью обновления
-        self.load_data()
-        if self.data is None:
-            return
-        
-        # Настройка фильтров и получение параметров
-        params = self.setup_filters()
-        
-        # Применение фильтров
-        filtered_data = self.apply_filters(params)
-        
-        # Обработка и отображение данных
-        self.process_and_display_data(filtered_data, params)
-
+# Точка входа в приложение
 if __name__ == "__main__":
     app = StreamlitApp()
     app.run()
