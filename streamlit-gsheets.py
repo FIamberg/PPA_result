@@ -217,7 +217,7 @@ class StreamlitApp:
         """Инициализация приложения"""
         try:
             st.set_page_config(
-                page_title="Google Sheets Viewer",
+                page_title="Report players",
                 page_icon="📊",
                 layout="wide",
                 initial_sidebar_state="expanded"
