@@ -766,18 +766,42 @@ class StreamlitApp:
             st.plotly_chart(fig, use_container_width=True)
 
     def load_data(self):
-        """Загружает данные с возможностью обновления"""
-        col1, col2 = st.columns([6, 1])
-        with col2:
-            if st.button("🔄 Обновить данные", key="refresh_data"):
-                with st.spinner("Обновление данных..."):
-                    self.data = self.data_loader.load_data(force_reload=True)
-                    st.success("Данные обновлены!")
-                    st.experimental_rerun()
-        
-        if self.data is None:
-            with st.spinner("Загрузка данных..."):
-                self.data = self.data_loader.load_data()
+        """
+        Загружает данные с возможностью обновления
+        """
+        try:
+            col1, col2 = st.columns([6, 1])
+            with col2:
+                refresh = st.button("🔄 Обновить данные", key="refresh_data")
+                
+                if refresh:
+                    with st.spinner("Обновление данных..."):
+                        self.data = self.data_loader.load_data(force_reload=True)
+                        if self.data is not None:
+                            st.success("Данные обновлены!")
+                            try:
+                                st.rerun()  # Используем новый метод вместо experimental_rerun
+                            except AttributeError:
+                                # Для обратной совместимости со старыми версиями Streamlit
+                                try:
+                                    st.experimental_rerun()
+                                except Exception as e:
+                                    st.warning("Пожалуйста, обновите страницу вручную")
+                                    logger.error(f"Ошибка при перезагрузке страницы: {e}")
+            
+            if self.data is None:
+                with st.spinner("Загрузка данных..."):
+                    self.data = self.data_loader.load_data()
+                    if self.data is None:
+                        st.error("Не удалось загрузить данные. Пожалуйста, проверьте подключение и попробуйте снова.")
+                        return
+                
+
+                
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке данных: {e}")
+            st.error("Произошла ошибка при загрузке данных. Пожалуйста, обновите страницу и попробуйте снова.")
+            return None
 
     def run(self):
         """Запускает приложение"""
