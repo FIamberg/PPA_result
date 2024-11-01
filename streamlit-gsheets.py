@@ -35,7 +35,7 @@ def get_date_ranges():
         'last_30_days': (thirty_days_ago, today)
     }
 
-@st.cache_resource(show_spinner=False, ttl=3600)  # Добавляем ttl для периодического обновления кэша
+@st.cache_resource(show_spinner=False, ttl=7200)  # Добавляем ttl для периодического обновления кэша
 class DataLoader:
     def __init__(self):
         try:
