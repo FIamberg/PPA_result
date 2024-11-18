@@ -185,7 +185,7 @@ class DataLoader:
             sheet = self.service.spreadsheets()
             result = sheet.values().get(
                 spreadsheetId=SPREADSHEET_ID,
-                range="pivot_result"
+                range="Лист40 (копия)"
             ).execute()
             values = result.get("values", [])
             
