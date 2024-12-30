@@ -185,7 +185,7 @@ class DataLoader:
             sheet = self.service.spreadsheets()
             result = sheet.values().get(
                 spreadsheetId=SPREADSHEET_ID,
-                range="Лист40 (копия)"
+                range="Лист64"
             ).execute()
             values = result.get("values", [])
             
