@@ -490,7 +490,7 @@ class StreamlitApp:
         with col2:
             metric_cols = st.columns(5)
             
-            total_profit = float(filtered_grouped_data['Profit'].sum())
+            total_profit = float(filtered_grouped_data['Profit_USD_PLAYER'].sum())
             total_win = float(filtered_grouped_data['Win_USD_PLAYER'].sum())
             total_rb = float(filtered_grouped_data['RB_USD_PLAYER'].sum())
             total_hands = float(filtered_grouped_data['руки'].sum())
