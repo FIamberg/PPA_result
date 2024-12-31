@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 
 # Константы
-NUMERIC_COLUMNS = ['руки', 'RB%_PLAYER', 'Rake_USD_PLAYER', 'RB_USD_PLAYER', 'Win_USD_PLAYER', 'Profit_PLAYER']
+NUMERIC_COLUMNS = ['руки', 'RB%', 'Rake_USD', 'RB_USD', 'Win_USD', 'Profit']
 SPREADSHEET_ID = '1wK1Z8Mg7kmoYqVzNzDcl-l4FKwqWfL9A4w3J_aN90DY'
 CACHE_PATH = '.streamlit/cache/'
 CACHE_FILE = 'data_cache.json'
